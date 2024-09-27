@@ -1,0 +1,47 @@
+{
+  "name": "code-polish-pro",
+  "version": "2.0.4",
+  "description": "Advanced setup for ESLint, Prettier, and Husky with intelligent project detection",
+  "bin": {
+    "code-polish-pro": "bin/index.js"
+  },
+  "scripts": {
+    "start": "node ./bin/index.js"
+  },
+  "keywords": [
+    "eslint",
+    "prettier",
+    "husky",
+    "lint-staged",
+    "setup",
+    "cli",
+    "javascript",
+    "typescript",
+    "code quality",
+    "formatting",
+    "linting"
+  ],
+  "author": "waqasrana04",
+  "license": "MIT",
+  "dependencies": {
+    "semver": "^7.5.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.39.0",
+    "prettier": "^2.8.8"
+  },
+  "files": [
+    "bin/index.js"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/waqasrana100/code-polish-pro"
+  },
+  "bugs": {
+    "url": "https://github.com/waqasrana100/code-polish-pro/issues"
+  },
+  "homepage": "https://github.com/waqasrana100/code-polish-pro#readme"
+}
