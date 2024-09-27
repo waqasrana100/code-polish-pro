@@ -4,12 +4,10 @@ const fs = require('fs').promises;
 const path = require('path');
 const { execSync, spawn } = require('child_process');
 const readline = require('readline');
-const util = require('util');
 const semver = require('semver');
 
 const MINIMUM_NODE_VERSION = '14.0.0';
 
-// Advanced logger with timestamps and log levels
 const logger = {
   _log(level, message) {
     const timestamp = new Date().toISOString();
@@ -31,13 +29,10 @@ const commonDependencies = [
 ];
 
 const typeSpecificDependencies = {
-  nextjs: ['@next/eslint-plugin-next@^13.3.4'],
+  nextjs: ['eslint-config-next@latest'],
   react: ['eslint-plugin-react@^7.32.2', 'eslint-plugin-react-hooks@^4.6.0', 'eslint-plugin-jsx-a11y@^6.7.1'],
   nodejs: ['eslint-plugin-node@^11.1.0'],
-  angular: [
-    '@angular-eslint/eslint-plugin@^16.0.3',
-    '@angular-eslint/eslint-plugin-template@^16.0.3',
-  ],
+  angular: ['@angular-eslint/eslint-plugin@^16.0.3', '@angular-eslint/eslint-plugin-template@^16.0.3'],
   vue: ['eslint-plugin-vue@^9.11.0'],
   svelte: ['eslint-plugin-svelte@^2.27.1'],
 };
@@ -51,11 +46,7 @@ const huskyDependencies = ['husky@^8.0.3', 'lint-staged@^13.2.2'];
 
 const eslintConfigs = {
   nextjs: {
-    extends: [
-      'next/core-web-vitals',
-      'plugin:@next/next/recommended',
-      'plugin:prettier/recommended',
-    ],
+    extends: ['next/core-web-vitals'],
   },
   react: {
     extends: [
@@ -64,13 +55,10 @@ const eslintConfigs = {
       'plugin:react/jsx-runtime',
       'plugin:react-hooks/recommended',
       'plugin:jsx-a11y/recommended',
-      'plugin:prettier/recommended',
     ],
     plugins: ['react', 'react-hooks', 'jsx-a11y'],
     settings: {
-      react: {
-        version: 'detect',
-      },
+      react: { version: 'detect' },
     },
     rules: {
       'react/react-in-jsx-scope': 'off',
@@ -78,43 +66,26 @@ const eslintConfigs = {
     },
   },
   nodejs: {
-    extends: [
-      'eslint:recommended',
-      'plugin:node/recommended',
-      'plugin:prettier/recommended',
-    ],
+    extends: ['eslint:recommended', 'plugin:node/recommended'],
     plugins: ['node'],
+    env: { node: true },
   },
   angular: {
     extends: [
       'eslint:recommended',
       'plugin:@angular-eslint/recommended',
       'plugin:@angular-eslint/template/recommended',
-      'plugin:prettier/recommended',
     ],
     plugins: ['@angular-eslint'],
   },
   vue: {
-    extends: [
-      'eslint:recommended',
-      'plugin:vue/vue3-recommended',
-      'plugin:prettier/recommended',
-    ],
+    extends: ['eslint:recommended', 'plugin:vue/vue3-recommended'],
     plugins: ['vue'],
   },
   svelte: {
-    extends: [
-      'eslint:recommended',
-      'plugin:svelte/recommended',
-      'plugin:prettier/recommended',
-    ],
+    extends: ['eslint:recommended', 'plugin:svelte/recommended'],
     plugins: ['svelte'],
-    overrides: [
-      {
-        files: ['*.svelte'],
-        parser: 'svelte-eslint-parser',
-      },
-    ],
+    overrides: [{ files: ['*.svelte'], parser: 'svelte-eslint-parser' }],
   },
 };
 
@@ -123,13 +94,10 @@ async function prompt(question, validator = () => true) {
     input: process.stdin,
     output: process.stdout,
   });
-
   try {
     while (true) {
       const answer = await new Promise((resolve) => rl.question(question, resolve));
-      if (validator(answer)) {
-        return answer;
-      }
+      if (validator(answer)) return answer;
       logger.warn('Invalid input. Please try again.');
     }
   } finally {
@@ -154,33 +122,25 @@ async function checkGitRepository() {
 
 async function installDependencies(dependencies) {
   logger.info('Installing dependencies...');
-  
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const args = ['install', '--save-dev', ...dependencies];
-
   try {
-    // Try using spawn first
     await new Promise((resolve, reject) => {
       const installProcess = spawn(npmCommand, args, { stdio: 'inherit' });
       installProcess.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`npm install failed with code ${code}`));
-        }
+        if (code === 0) resolve();
+        else reject(new Error(`npm install failed with code ${code}`));
       });
     });
   } catch (error) {
     logger.warn('Spawn method failed, falling back to execSync...');
     try {
-      // Fallback to execSync if spawn fails
       execSync(`${npmCommand} ${args.join(' ')}`, { stdio: 'inherit' });
     } catch (execError) {
       logger.error('Failed to install dependencies.');
       throw execError;
     }
   }
-
   logger.info('Dependencies installed successfully.');
 }
 
@@ -207,11 +167,8 @@ async function updatePackageJson(updates) {
 
 async function setupHusky() {
   logger.info('Setting up Husky and lint-staged...');
-  
   await installDependencies(huskyDependencies);
-  
   execSync('npx husky install', { stdio: 'inherit' });
-  
   const preCommitContent = `#!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
@@ -219,8 +176,27 @@ npx lint-staged
 `;
   await fs.writeFile('.husky/pre-commit', preCommitContent);
   await fs.chmod('.husky/pre-commit', '755');
-  
   logger.info('Husky and lint-staged have been configured.');
+}
+
+async function removeConflictingDependencies(projectType) {
+  const conflictingDependencies = {
+    nextjs: ['@next/eslint-plugin-next'],
+    react: [],
+    nodejs: [],
+    angular: [],
+    vue: [],
+    svelte: [],
+  };
+
+  for (const dep of conflictingDependencies[projectType]) {
+    try {
+      execSync(`npm uninstall ${dep}`, { stdio: 'inherit' });
+      logger.info(`Removed conflicting dependency: ${dep}`);
+    } catch (error) {
+      logger.warn(`Failed to uninstall ${dep}. It might not have been installed.`);
+    }
+  }
 }
 
 async function setupProject() {
@@ -228,7 +204,7 @@ async function setupProject() {
     await checkNodeVersion();
     await checkGitRepository();
 
-    logger.info('Welcome to ESLint Pretty Quick! Let\'s set up your project.');
+    logger.info('Welcome to CodePolishPro! Let\'s set up your project.');
 
     const projectType = await prompt(
       `What type of project are you working on? (${projectTypes.join(', ')}): `,
@@ -246,11 +222,13 @@ async function setupProject() {
     logger.info(`- ${useStrict ? 'Strict' : 'Standard'} ESLint configuration`);
     logger.info(`- ${usePrettier ? 'With' : 'Without'} Prettier integration`);
 
+    await removeConflictingDependencies(projectType);
+
     let dependencies = [
       ...commonDependencies,
       ...typeSpecificDependencies[projectType],
     ];
-    if (useTypeScript) dependencies = [...dependencies, ...typescriptDependencies];
+    if (useTypeScript && projectType !== 'nextjs') dependencies = [...dependencies, ...typescriptDependencies];
     if (!usePrettier) dependencies = dependencies.filter((dep) => !dep.includes('prettier'));
 
     await installDependencies(dependencies);
@@ -269,7 +247,7 @@ async function setupProject() {
       },
     };
 
-    if (useTypeScript) {
+    if (useTypeScript && projectType !== 'nextjs') {
       eslintConfig.parser = '@typescript-eslint/parser';
       eslintConfig.plugins = [...(eslintConfig.plugins || []), '@typescript-eslint'];
       eslintConfig.extends.unshift('plugin:@typescript-eslint/recommended');
@@ -282,6 +260,10 @@ async function setupProject() {
         'no-debugger': 'error',
         'no-unused-vars': 'error',
       };
+    }
+
+    if (usePrettier) {
+      eslintConfig.extends.push('plugin:prettier/recommended');
     }
 
     await writeJsonFile('.eslintrc.json', eslintConfig);

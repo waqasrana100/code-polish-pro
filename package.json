@@ -19,7 +19,13 @@
     "typescript",
     "code quality",
     "formatting",
-    "linting"
+    "linting",
+    "nextjs",
+    "react",
+    "nodejs",
+    "angular",
+    "vue",
+    "svelte"
   ],
   "author": "waqasrana04",
   "license": "MIT",
