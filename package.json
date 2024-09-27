@@ -1,6 +1,6 @@
 {
   "name": "code-polish-pro",
-  "version": "2.0.1",
+  "version": "2.0.3",
   "description": "Advanced setup for ESLint, Prettier, and Husky with intelligent project detection",
   "bin": {
     "code-polish-pro": "bin/index.js"
@@ -38,10 +38,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/waqasrana04/code-polish-pro.git"
+    "url": "https://github.com/waqasrana100/code-polish-pro"
   },
   "bugs": {
-    "url": "https://github.com/waqasrana04/code-polish-pro/issues"
+    "url": "https://github.com/waqasrana100/code-polish-pro/issues"
   },
-  "homepage": "https://github.com/waqasrana04/code-polish-pro#readme"
+  "homepage": "https://github.com/waqasrana100/code-polish-pro#readme"
 }
