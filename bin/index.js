@@ -561,17 +561,17 @@ async function setupProject() {
       await fileSystem.createPrettierIgnore();
     }
 
-   const packageJsonUpdates = {
-  scripts: {
-    ...(packageJson.scripts || {}),
-    lint: packageJson.scripts?.lint || 'eslint .',
-    'lint:fix': packageJson.scripts?.['lint:fix'] || 'eslint . --fix',
-  },
-};
+    const packageJsonUpdates = {
+      scripts: {
+        ...(packageJson.scripts || {}),
+        lint: packageJson.scripts?.lint || 'eslint .',
+        'lint:fix': packageJson.scripts?.['lint:fix'] || 'eslint . --fix',
+      },
+    };
 
-if (usePrettier) {
-  packageJsonUpdates.scripts.format = packageJson.scripts?.format || 'prettier --write .';
-}
+    if (usePrettier) {
+      packageJsonUpdates.scripts.format = packageJson.scripts?.format || 'prettier --write .';
+    }
 
     if (useHusky) {
       packageJsonUpdates['lint-staged'] = {
