@@ -285,6 +285,39 @@ const environmentChecker = {
   },
 };
 
+// Prettier configuration generator
+
+
+// Prettier configuration generator
+const prettierConfigGenerator = {
+  generateConfig() {
+    return {
+      singleQuote: true,
+      trailingComma: 'es5',
+      printWidth: 100,
+      tabWidth: 2,
+      semi: true,
+    };
+  },
+};
+
+// Husky setup utility
+const huskySetup = {
+  async setup() {
+    logger.info('Setting up Husky and lint-staged...');
+    await packageManager.installDependencies(dependencyManager.huskyDependencies);
+    execSync('npx husky install', { stdio: 'inherit' });
+    const preCommitContent = `#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+npx lint-staged
+`;
+    await fs.writeFile('.husky/pre-commit', preCommitContent);
+    await fs.chmod('.husky/pre-commit', '755');
+    logger.info('Husky and lint-staged have been configured.');
+  },
+};
+
 // ESLint configuration generator
 const eslintConfigGenerator = {
   generateConfig(projectType, useTypeScript, useStrict, usePrettier, packageJson, existingConfig = {}) {
