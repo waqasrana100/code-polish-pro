@@ -396,9 +396,15 @@ async function setupProject() {
     const eslintConfig = eslintConfigGenerator.generateConfig(projectType, useTypeScript, useStrict, usePrettier, packageJson);
     await fileSystem.writeJsonFile('.eslintrc.json', eslintConfig);
 
+    // Generate .eslintignore file
+    await fileSystem.createEslintIgnore(projectType);
+
     if (usePrettier) {
       const prettierConfig = prettierConfigGenerator.generateConfig();
       await fileSystem.writeJsonFile('.prettierrc', prettierConfig);
+      
+      // Generate .prettierignore file
+      await fileSystem.createPrettierIgnore();
     }
 
     const packageJsonUpdates = {
@@ -428,10 +434,9 @@ async function setupProject() {
 
     if (packageJson.type !== 'module') {
       logger.info('');
-      logger.info('Note: Your package.json does not have "type": "module" set.');
-      logger.info('If you want to use ES modules, consider adding')
-         logger.info('"type": "module"');
-      logger.info('This will allow you to use import/export syntax without .mjs file extensions.');
+      logger.info('Note: Your package.json does not have "type": "module" set. 😒');
+      logger.info('If you want to use ES modules, consider adding "type": "module ✨"');
+      logger.info('This will allow you to use import/export syntax without .mjs file extensions. 🚀');
     }
 
     logger.info('Happy coding!');
