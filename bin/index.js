@@ -22,7 +22,7 @@ const logger = {
 const projectTypes = ['nextjs', 'react', 'nodejs', 'angular', 'vue', 'svelte'];
 
 const commonDependencies = [
-  'eslint@^8.39.0',
+  'eslint@^9.11.1',
   'prettier@^2.8.8',
   'eslint-config-prettier@^8.8.0',
   'eslint-plugin-prettier@^4.2.1',
@@ -30,11 +30,16 @@ const commonDependencies = [
 
 const typeSpecificDependencies = {
   nextjs: ['eslint-config-next@latest'],
-  react: ['eslint-plugin-react@^7.32.2', 'eslint-plugin-react-hooks@^4.6.0', 'eslint-plugin-jsx-a11y@^6.7.1'],
+  react: [
+    'eslint-plugin-react@^7.32.2',
+    'eslint-plugin-react-hooks@^4.6.0',
+    'eslint-plugin-jsx-a11y@^6.7.1',
+    'eslint-config-react-app@^7.0.1',
+  ],
   nodejs: ['eslint-plugin-node@^11.1.0'],
   angular: ['@angular-eslint/eslint-plugin@^16.0.3', '@angular-eslint/eslint-plugin-template@^16.0.3'],
   vue: ['eslint-plugin-vue@^9.11.0'],
-  svelte: ['eslint-plugin-svelte@^2.27.1'],
+  svelte: ['eslint-plugin-svelte@^2.27.1', 'eslint-config-svelte@^3.5.0'],
 };
 
 const typescriptDependencies = [
@@ -46,15 +51,17 @@ const huskyDependencies = ['husky@^8.0.3', 'lint-staged@^13.2.2'];
 
 const eslintConfigs = {
   nextjs: {
-    extends: ['next/core-web-vitals'],
+    extends: ['next/core-web-vitals', 'prettier'],
   },
   react: {
     extends: [
-      'eslint:recommended',
+      'react-app',
+      'react-app/jest',
       'plugin:react/recommended',
       'plugin:react/jsx-runtime',
       'plugin:react-hooks/recommended',
       'plugin:jsx-a11y/recommended',
+      'prettier',
     ],
     plugins: ['react', 'react-hooks', 'jsx-a11y'],
     settings: {
@@ -66,7 +73,7 @@ const eslintConfigs = {
     },
   },
   nodejs: {
-    extends: ['eslint:recommended', 'plugin:node/recommended'],
+    extends: ['eslint:recommended', 'plugin:node/recommended', 'prettier'],
     plugins: ['node'],
     env: { node: true },
   },
@@ -75,15 +82,16 @@ const eslintConfigs = {
       'eslint:recommended',
       'plugin:@angular-eslint/recommended',
       'plugin:@angular-eslint/template/recommended',
+      'prettier',
     ],
     plugins: ['@angular-eslint'],
   },
   vue: {
-    extends: ['eslint:recommended', 'plugin:vue/vue3-recommended'],
+    extends: ['eslint:recommended', 'plugin:vue/vue3-recommended', 'prettier'],
     plugins: ['vue'],
   },
   svelte: {
-    extends: ['eslint:recommended', 'plugin:svelte/recommended'],
+    extends: ['eslint:recommended', 'plugin:svelte/recommended', 'prettier'],
     plugins: ['svelte'],
     overrides: [{ files: ['*.svelte'], parser: 'svelte-eslint-parser' }],
   },
@@ -199,18 +207,41 @@ async function removeConflictingDependencies(projectType) {
   }
 }
 
+async function checkExistingESLintConfig() {
+  const eslintConfigFiles = [
+    '.eslintrc',
+    '.eslintrc.js',
+    '.eslintrc.cjs',
+    '.eslintrc.yaml',
+    '.eslintrc.yml',
+    '.eslintrc.json',
+  ];
+
+  for (const configFile of eslintConfigFiles) {
+    try {
+      await fs.access(configFile);
+      return configFile;
+    } catch (error) {
+      // File doesn't exist, continue checking
+    }
+  }
+
+  return null;
+}
+
 async function setupProject() {
   try {
     await checkNodeVersion();
     await checkGitRepository();
 
-    logger.info('Welcome to CodePolishPro! Let\'s set up your project.');
+    logger.info('Welcome to code-polish-pro! Let\'s set up your project.');
 
     const projectType = await prompt(
       `What type of project are you working on? (${projectTypes.join(', ')}): `,
       (answer) => projectTypes.includes(answer.toLowerCase())
     );
 
+    const packageJson = await readPackageJson();
     const useTypeScript = (await prompt('Are you using TypeScript? (y/n): ')).toLowerCase() === 'y';
     const useHusky = (await prompt('Do you want to set up Husky and lint-staged for pre-commit hooks? (y/n): ')).toLowerCase() === 'y';
     const useStrict = (await prompt('Do you want to enable strict mode for ESLint? (y/n): ')).toLowerCase() === 'y';
@@ -221,6 +252,16 @@ async function setupProject() {
     logger.info(`- ${useHusky ? 'With' : 'Without'} Husky and lint-staged`);
     logger.info(`- ${useStrict ? 'Strict' : 'Standard'} ESLint configuration`);
     logger.info(`- ${usePrettier ? 'With' : 'Without'} Prettier integration`);
+
+    const existingESLintConfig = await checkExistingESLintConfig();
+    if (existingESLintConfig) {
+      logger.warn(`Existing ESLint configuration found: ${existingESLintConfig}`);
+      const overwrite = (await prompt('Do you want to overwrite the existing configuration? (y/n): ')).toLowerCase() === 'y';
+      if (!overwrite) {
+        logger.info('Keeping existing ESLint configuration. Skipping ESLint setup.');
+        return;
+      }
+    }
 
     await removeConflictingDependencies(projectType);
 
@@ -238,12 +279,12 @@ async function setupProject() {
       root: true,
       env: {
         browser: true,
-        es2021: true,
+        es2022: true,
         node: true,
       },
       parserOptions: {
-        ecmaVersion: 2021,
-        sourceType: 'module',
+        ecmaVersion: 'latest',
+        sourceType: packageJson.type === 'module' ? 'module' : 'script',
       },
     };
 
@@ -303,6 +344,15 @@ async function setupProject() {
     logger.info('ESLint and Prettier have been set up successfully!');
     logger.info('To address any potential vulnerabilities, please run:');
     logger.info('npm audit fix');
+
+    if (packageJson.type !== 'module') {
+      logger.info('');
+      logger.info('Note: Your package.json does not have "type": "module" set.');
+      logger.info('If you want to use ES modules, consider adding it to your package.json:');
+      logger.info('"type": "module"');
+      logger.info('This will allow you to use import/export syntax without .mjs file extensions.');
+    }
+
     logger.info('Happy coding!');
   } catch (error) {
     logger.error(`An error occurred: ${error.message}`);
