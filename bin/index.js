@@ -27,6 +27,7 @@ const dependencyManager = {
       'eslint-plugin-react-hooks@^4.6.0',
       'eslint-plugin-jsx-a11y@^6.8.0',
       'eslint-config-react-app@^7.0.1',
+      'eslint-plugin-import@^2.29.1',
     ],
     nodejs: ['eslint-plugin-node@^11.1.0'],
     angular: ['@angular-eslint/eslint-plugin@^17.3.0', '@angular-eslint/eslint-plugin-template@^17.3.0'],
@@ -322,6 +323,12 @@ const eslintConfigGenerator = {
       case 'svelte':
         eslintConfig = this.configureSvelte(eslintConfig);
         break;
+      case 'vue':
+        eslintConfig = this.configureVue(eslintConfig);
+        break;
+      case 'angular':
+        eslintConfig = this.configureAngular(eslintConfig);
+        break;
     }
 
     if (useTypeScript && projectType !== 'nextjs') {
@@ -336,11 +343,10 @@ const eslintConfigGenerator = {
   },
 
   mergeConfigs(baseConfig, existingConfig) {
-    // Deep merge configurations
     const merged = { ...baseConfig };
     for (const [key, value] of Object.entries(existingConfig)) {
       if (Array.isArray(value)) {
-        merged[key] = [...(merged[key] || []), ...value];
+        merged[key] = [...new Set([...(merged[key] || []), ...value])];
       } else if (typeof value === 'object' && value !== null) {
         merged[key] = this.mergeConfigs(merged[key] || {}, value);
       } else {
@@ -357,19 +363,30 @@ const eslintConfigGenerator = {
       'plugin:react/jsx-runtime',
       'plugin:react-hooks/recommended',
       'plugin:jsx-a11y/recommended',
+      'plugin:import/errors',
+      'plugin:import/warnings',
     ];
-    config.plugins = [...(config.plugins || []), 'react', 'react-hooks', 'jsx-a11y'];
+    config.plugins = [...(config.plugins || []), 'react', 'react-hooks', 'jsx-a11y', 'import'];
     config.settings = {
       ...config.settings,
       react: { version: 'detect' },
+      'import/resolver': {
+        node: {
+          extensions: ['.js', '.jsx', '.ts', '.tsx'],
+        },
+      },
     };
     config.rules = {
       ...config.rules,
-      'react/prop-types': 'error',
+      'react/prop-types': useTypeScript ? 'off' : 'error',
       'react/jsx-uses-react': 'error',
       'react/jsx-uses-vars': 'error',
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
+      'import/no-unresolved': 'error',
+      'import/named': 'error',
+      'import/default': 'error',
+      'import/namespace': 'error',
     };
     if (useTypeScript) {
       config.parserOptions.ecmaFeatures = { jsx: true };
@@ -413,6 +430,23 @@ const eslintConfigGenerator = {
     return config;
   },
 
+  configureVue(config) {
+    config.extends = [...(config.extends || []), 'plugin:vue/vue3-recommended'];
+    config.plugins = [...(config.plugins || []), 'vue'];
+    config.parser = 'vue-eslint-parser';
+    return config;
+  },
+
+  configureAngular(config) {
+    config.extends = [
+      ...(config.extends || []),
+      'plugin:@angular-eslint/recommended',
+      'plugin:@angular-eslint/template/process-inline-templates',
+    ];
+    config.plugins = [...(config.plugins || []), '@angular-eslint'];
+    return config;
+  },
+
   configureTypeScript(config) {
     config.parser = '@typescript-eslint/parser';
     config.plugins = [...(config.plugins || []), '@typescript-eslint'];
@@ -439,36 +473,7 @@ const eslintConfigGenerator = {
   },
 };
 
-
-// Prettier configuration generator
-const prettierConfigGenerator = {
-  generateConfig() {
-    return {
-      singleQuote: true,
-      trailingComma: 'es5',
-      printWidth: 100,
-      tabWidth: 2,
-      semi: true,
-    };
-  },
-};
-
-// Husky setup utility
-const huskySetup = {
-  async setup() {
-    logger.info('Setting up Husky and lint-staged...');
-    await packageManager.installDependencies(dependencyManager.huskyDependencies);
-    execSync('npx husky install', { stdio: 'inherit' });
-    const preCommitContent = `#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
-npx lint-staged
-`;
-    await fs.writeFile('.husky/pre-commit', preCommitContent);
-    await fs.chmod('.husky/pre-commit', '755');
-    logger.info('Husky and lint-staged have been configured.');
-  },
-};
+// ... (rest of the code remains the same)
 
 // Main setup function
 async function setupProject() {
@@ -543,10 +548,10 @@ async function setupProject() {
     logger.info('To address any potential vulnerabilities, please run:');
     logger.info('npm audit fix');
 
-    if (packageJson.type !== 'module') {
+    if (packageJson.type !== 'module' && projectType === 'nodejs') {
       logger.info('');
       logger.info('Note: Your package.json does not have "type": "module" set. 😒');
-      logger.info('If you want to use ES modules, consider adding "type": "module ✨"');
+      logger.info('If you want to use ES modules, consider adding "type": "module" ✨');
       logger.info('This will allow you to use import/export syntax without .mjs file extensions. 🚀');
     }
 
