@@ -32,7 +32,7 @@ const dependencyManager = {
     nodejs: ['eslint-plugin-node@^11.1.0'],
     angular: ['@angular-eslint/eslint-plugin@^17.3.0', '@angular-eslint/eslint-plugin-template@^17.3.0'],
     vue: ['eslint-plugin-vue@^9.23.0'],
-    svelte: ['eslint-plugin-svelte@^2.35.1', 'eslint-config-svelte@^3.0.0'],
+    svelte: ['eslint-plugin-svelte@^2.35.1', 'eslint-config-svelte@^4.0.0'],
   },
   typescriptDependencies: [
     '@typescript-eslint/parser@^7.1.0',
