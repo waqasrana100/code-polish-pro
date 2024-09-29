@@ -330,7 +330,12 @@ const eslintConfigGenerator = {
       },
       parserOptions: {
         ecmaVersion: 'latest',
-        sourceType: packageJson.type === 'module' ? 'module' : 'script',
+       sourceType: packageJson.type === 'module' 
+        ? 'module' 
+        : (projectType === 'react' || projectType === 'nextjs' || projectType === 'svelte') 
+          ? 'module' 
+          : 'script',
+
       },
       rules: {
         'no-console': useStrict ? 'error' : 'warn',
