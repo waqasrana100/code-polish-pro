@@ -32,7 +32,7 @@ const dependencyManager = {
     nodejs: ['eslint-plugin-node@^11.1.0'],
     angular: ['@angular-eslint/eslint-plugin@^17.3.0', '@angular-eslint/eslint-plugin-template@^17.3.0'],
     vue: ['eslint-plugin-vue@^9.23.0'],
-    svelte: ['eslint-plugin-svelte@^2.35.1', 'eslint-config-svelte@^4.0.5'],
+    svelte: ['eslint-plugin-svelte@^2.35.1', 'eslint-config-svelte@^3.0.0'],
   },
   typescriptDependencies: [
     '@typescript-eslint/parser@^7.1.0',
@@ -286,9 +286,6 @@ const environmentChecker = {
 };
 
 // Prettier configuration generator
-
-
-// Prettier configuration generator
 const prettierConfigGenerator = {
   generateConfig() {
     return {
@@ -335,7 +332,6 @@ const eslintConfigGenerator = {
         : (projectType === 'react' || projectType === 'nextjs' || projectType === 'svelte') 
           ? 'module' 
           : 'script',
-
       },
       rules: {
         'no-console': useStrict ? 'error' : 'warn',
@@ -463,6 +459,13 @@ const eslintConfigGenerator = {
       {
         files: ['*.svelte'],
         parser: 'svelte-eslint-parser',
+        parserOptions: {
+          ecmaVersion: 2020,
+          sourceType: 'module',
+        },
+        rules: {
+          'no-unused-vars': 'warn',
+        },
       },
     ];
     return config;
@@ -510,8 +513,6 @@ const eslintConfigGenerator = {
     return config;
   },
 };
-
-// ... (rest of the code remains the same)
 
 // Main setup function
 async function setupProject() {
