@@ -286,9 +286,8 @@ const environmentChecker = {
 
 // ESLint configuration generator
 const eslintConfigGenerator = {
-  generateConfig(projectType, useTypeScript, useStrict, usePrettier, packageJson) {
-    const eslintConfig = {
-      ...eslintConfigTemplates[projectType],
+  generateConfig(projectType, useTypeScript, useStrict, usePrettier, packageJson, existingConfig = {}) {
+    let eslintConfig = {
       root: true,
       env: {
         browser: true,
@@ -303,32 +302,143 @@ const eslintConfigGenerator = {
         'no-console': useStrict ? 'error' : 'warn',
         'no-debugger': 'error',
         'no-unused-vars': 'error',
-        'node/no-unsupported-features/es-syntax': 'off',
       },
     };
 
-    if (useTypeScript && projectType !== 'nextjs') {
-      eslintConfig.parser = '@typescript-eslint/parser';
-      eslintConfig.plugins = [...(eslintConfig.plugins || []), '@typescript-eslint'];
-      eslintConfig.extends.unshift('plugin:@typescript-eslint/recommended');
+    // Merge with existing configuration
+    eslintConfig = this.mergeConfigs(eslintConfig, existingConfig);
+
+    // Add project-specific configurations
+    switch (projectType) {
+      case 'react':
+        eslintConfig = this.configureReact(eslintConfig, useTypeScript);
+        break;
+      case 'nextjs':
+        eslintConfig = this.configureNextjs(eslintConfig);
+        break;
+      case 'nodejs':
+        eslintConfig = this.configureNodejs(eslintConfig);
+        break;
+      case 'svelte':
+        eslintConfig = this.configureSvelte(eslintConfig);
+        break;
     }
 
-    if (useStrict) {
-      eslintConfig.rules = {
-        ...eslintConfig.rules,
-        'no-console': 'error',
-        'no-debugger': 'error',
-        'no-unused-vars': 'error',
-      };
+    if (useTypeScript && projectType !== 'nextjs') {
+      eslintConfig = this.configureTypeScript(eslintConfig);
     }
 
     if (usePrettier) {
-      eslintConfig.extends.push('plugin:prettier/recommended');
+      eslintConfig = this.configurePrettier(eslintConfig);
     }
 
     return eslintConfig;
   },
+
+  mergeConfigs(baseConfig, existingConfig) {
+    // Deep merge configurations
+    const merged = { ...baseConfig };
+    for (const [key, value] of Object.entries(existingConfig)) {
+      if (Array.isArray(value)) {
+        merged[key] = [...(merged[key] || []), ...value];
+      } else if (typeof value === 'object' && value !== null) {
+        merged[key] = this.mergeConfigs(merged[key] || {}, value);
+      } else {
+        merged[key] = value;
+      }
+    }
+    return merged;
+  },
+
+  configureReact(config, useTypeScript) {
+    config.extends = [
+      ...(config.extends || []),
+      'plugin:react/recommended',
+      'plugin:react/jsx-runtime',
+      'plugin:react-hooks/recommended',
+      'plugin:jsx-a11y/recommended',
+    ];
+    config.plugins = [...(config.plugins || []), 'react', 'react-hooks', 'jsx-a11y'];
+    config.settings = {
+      ...config.settings,
+      react: { version: 'detect' },
+    };
+    config.rules = {
+      ...config.rules,
+      'react/prop-types': 'error',
+      'react/jsx-uses-react': 'error',
+      'react/jsx-uses-vars': 'error',
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    };
+    if (useTypeScript) {
+      config.parserOptions.ecmaFeatures = { jsx: true };
+    }
+    return config;
+  },
+
+  configureNextjs(config) {
+    config.extends = [...(config.extends || []), 'next/core-web-vitals'];
+    return config;
+  },
+
+  configureNodejs(config) {
+    config.extends = [...(config.extends || []), 'plugin:node/recommended'];
+    config.plugins = [...(config.plugins || []), 'node'];
+    config.rules = {
+      ...config.rules,
+      'node/exports-style': ['error', 'module.exports'],
+      'node/file-extension-in-import': ['error', 'always'],
+      'node/prefer-global/buffer': ['error', 'always'],
+      'node/prefer-global/console': ['error', 'always'],
+      'node/prefer-global/process': ['error', 'always'],
+      'node/prefer-global/url-search-params': ['error', 'always'],
+      'node/prefer-global/url': ['error', 'always'],
+      'node/prefer-promises/dns': 'error',
+      'node/prefer-promises/fs': 'error',
+    };
+    return config;
+  },
+
+  configureSvelte(config) {
+    config.extends = [...(config.extends || []), 'plugin:svelte/recommended'];
+    config.plugins = [...(config.plugins || []), 'svelte'];
+    config.overrides = [
+      ...(config.overrides || []),
+      {
+        files: ['*.svelte'],
+        parser: 'svelte-eslint-parser',
+      },
+    ];
+    return config;
+  },
+
+  configureTypeScript(config) {
+    config.parser = '@typescript-eslint/parser';
+    config.plugins = [...(config.plugins || []), '@typescript-eslint'];
+    config.extends = [
+      ...(config.extends || []),
+      'plugin:@typescript-eslint/recommended',
+    ];
+    config.rules = {
+      ...config.rules,
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
+    };
+    return config;
+  },
+
+  configurePrettier(config) {
+    config.extends = [...(config.extends || []), 'plugin:prettier/recommended'];
+    config.rules = {
+      ...config.rules,
+      'prettier/prettier': 'error',
+    };
+    return config;
+  },
 };
+
 
 // Prettier configuration generator
 const prettierConfigGenerator = {
@@ -378,12 +488,13 @@ async function setupProject() {
     logger.info(`- ${usePrettier ? 'With' : 'Without'} Prettier integration`);
 
     const existingESLintConfig = await fileSystem.checkExistingESLintConfig();
+    let existingConfig = {};
     if (existingESLintConfig) {
       logger.warn(`Existing ESLint configuration found: ${existingESLintConfig}`);
       const overwrite = (await userInteraction.prompt('Do you want to overwrite the existing configuration? (y/n): ')).toLowerCase() === 'y';
       if (!overwrite) {
-        logger.info('Keeping existing ESLint configuration. Skipping ESLint setup.');
-        return;
+        logger.info('Merging with existing ESLint configuration.');
+        existingConfig = require(path.resolve(process.cwd(), existingESLintConfig));
       }
     }
 
@@ -393,7 +504,7 @@ async function setupProject() {
     await packageManager.installDependencies(dependencies);
 
     const packageJson = await fileSystem.readPackageJson();
-    const eslintConfig = eslintConfigGenerator.generateConfig(projectType, useTypeScript, useStrict, usePrettier, packageJson);
+    const eslintConfig = eslintConfigGenerator.generateConfig(projectType, useTypeScript, useStrict, usePrettier, packageJson, existingConfig);
     await fileSystem.writeJsonFile('.eslintrc.json', eslintConfig);
 
     // Generate .eslintignore file
