@@ -6,50 +6,48 @@ const { execSync, spawn } = require('child_process');
 const readline = require('readline');
 const semver = require('semver');
 
-const MINIMUM_NODE_VERSION = '14.0.0';
-
-const logger = {
-  _log(level, message) {
-    const timestamp = new Date().toISOString();
-    console[level](`[${timestamp}] [${level.toUpperCase()}] ${message}`);
-  },
-  info: (message) => logger._log('info', message),
-  warn: (message) => logger._log('warn', message),
-  error: (message) => logger._log('error', message),
-  debug: (message) => process.env.DEBUG && logger._log('debug', message),
+// Configuration
+const config = {
+  MINIMUM_NODE_VERSION: '14.0.0',
+  PROJECT_TYPES: ['nextjs', 'react', 'nodejs', 'angular', 'vue', 'svelte'],
 };
 
-const projectTypes = ['nextjs', 'react', 'nodejs', 'angular', 'vue', 'svelte'];
-
-const commonDependencies = [
-  'eslint@^9.11.1',
-  'prettier@^2.8.8',
-  'eslint-config-prettier@^8.8.0',
-  'eslint-plugin-prettier@^4.2.1',
-];
-
-const typeSpecificDependencies = {
-  nextjs: ['eslint-config-next@latest'],
-  react: [
-    'eslint-plugin-react@^7.32.2',
-    'eslint-plugin-react-hooks@^4.6.0',
-    'eslint-plugin-jsx-a11y@^6.7.1',
-    'eslint-config-react-app@^7.0.1',
+// Dependency management
+const dependencyManager = {
+  commonDependencies: [
+    'eslint@^8.56.0',
+    'prettier@^3.2.5',
+    'eslint-config-prettier@^9.1.0',
+    'eslint-plugin-prettier@^5.1.3',
   ],
-  nodejs: ['eslint-plugin-node@^11.1.0'],
-  angular: ['@angular-eslint/eslint-plugin@^16.0.3', '@angular-eslint/eslint-plugin-template@^16.0.3'],
-  vue: ['eslint-plugin-vue@^9.11.0'],
-  svelte: ['eslint-plugin-svelte@^2.27.1', 'eslint-config-svelte@^3.5.0'],
+  typeSpecificDependencies: {
+    nextjs: ['eslint-config-next@latest'],
+    react: [
+      'eslint-plugin-react@^7.34.1',
+      'eslint-plugin-react-hooks@^4.6.0',
+      'eslint-plugin-jsx-a11y@^6.8.0',
+      'eslint-config-react-app@^7.0.1',
+    ],
+    nodejs: ['eslint-plugin-node@^11.1.0'],
+    angular: ['@angular-eslint/eslint-plugin@^17.3.0', '@angular-eslint/eslint-plugin-template@^17.3.0'],
+    vue: ['eslint-plugin-vue@^9.23.0'],
+    svelte: ['eslint-plugin-svelte@^2.35.1', 'eslint-config-svelte@^4.0.5'],
+  },
+  typescriptDependencies: [
+    '@typescript-eslint/parser@^7.1.0',
+    '@typescript-eslint/eslint-plugin@^7.1.0',
+  ],
+  huskyDependencies: ['husky@^9.0.11', 'lint-staged@^15.2.2'],
+  getProjectDependencies(projectType, useTypeScript, usePrettier) {
+    let deps = [...this.commonDependencies, ...this.typeSpecificDependencies[projectType]];
+    if (useTypeScript && projectType !== 'nextjs') deps = [...deps, ...this.typescriptDependencies];
+    if (!usePrettier) deps = deps.filter(dep => !dep.includes('prettier'));
+    return deps;
+  },
 };
 
-const typescriptDependencies = [
-  '@typescript-eslint/parser@^5.59.5',
-  '@typescript-eslint/eslint-plugin@^5.59.5',
-];
-
-const huskyDependencies = ['husky@^8.0.3', 'lint-staged@^13.2.2'];
-
-const eslintConfigs = {
+// ESLint configuration templates
+const eslintConfigTemplates = {
   nextjs: {
     extends: ['next/core-web-vitals', 'prettier'],
   },
@@ -97,185 +95,160 @@ const eslintConfigs = {
   },
 };
 
-async function prompt(question, validator = () => true) {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  try {
-    while (true) {
-      const answer = await new Promise((resolve) => rl.question(question, resolve));
-      if (validator(answer)) return answer;
-      logger.warn('Invalid input. Please try again.');
-    }
-  } finally {
-    rl.close();
-  }
-}
+// Logger utility
+const logger = {
+  _log(level, message) {
+    const timestamp = new Date().toISOString();
+    console[level](`[${timestamp}] [${level.toUpperCase()}] ${message}`);
+  },
+  info: (message) => logger._log('info', message),
+  warn: (message) => logger._log('warn', message),
+  error: (message) => logger._log('error', message),
+  debug: (message) => process.env.DEBUG && logger._log('debug', message),
+};
 
-async function checkNodeVersion() {
-  const nodeVersion = process.version;
-  if (!semver.gte(nodeVersion, MINIMUM_NODE_VERSION)) {
-    throw new Error(`Node.js version ${MINIMUM_NODE_VERSION} or higher is required. Current version: ${nodeVersion}`);
-  }
-}
-
-async function checkGitRepository() {
-  try {
-    await fs.access('.git');
-  } catch (error) {
-    throw new Error('This directory is not a Git repository. Please initialize a Git repository before running this script.');
-  }
-}
-
-async function installDependencies(dependencies) {
-  logger.info('Installing dependencies...');
-  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const args = ['install', '--save-dev', ...dependencies];
-  try {
-    await new Promise((resolve, reject) => {
-      const installProcess = spawn(npmCommand, args, { stdio: 'inherit' });
-      installProcess.on('close', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`npm install failed with code ${code}`));
-      });
+// User interaction utilities
+const userInteraction = {
+  async prompt(question, validator = () => true) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
     });
-  } catch (error) {
-    logger.warn('Spawn method failed, falling back to execSync...');
     try {
-      execSync(`${npmCommand} ${args.join(' ')}`, { stdio: 'inherit' });
-    } catch (execError) {
-      logger.error('Failed to install dependencies.');
-      throw execError;
+      while (true) {
+        const answer = await new Promise((resolve) => rl.question(question, resolve));
+        if (validator(answer)) return answer;
+        logger.warn('Invalid input. Please try again.');
+      }
+    } finally {
+      rl.close();
     }
-  }
-  logger.info('Dependencies installed successfully.');
-}
-
-async function writeJsonFile(filePath, content) {
-  await fs.writeFile(filePath, JSON.stringify(content, null, 2) + '\n');
-  logger.info(`File created: ${filePath}`);
-}
-
-async function readPackageJson() {
-  const packageJsonPath = path.join(process.cwd(), 'package.json');
-  try {
-    const content = await fs.readFile(packageJsonPath, 'utf-8');
-    return JSON.parse(content);
-  } catch (error) {
-    throw new Error('Unable to read package.json. Make sure you are in the root directory of your project.');
-  }
-}
-
-async function updatePackageJson(updates) {
-  const packageJson = await readPackageJson();
-  const updatedPackageJson = { ...packageJson, ...updates };
-  await writeJsonFile('package.json', updatedPackageJson);
-}
-
-async function setupHusky() {
-  logger.info('Setting up Husky and lint-staged...');
-  await installDependencies(huskyDependencies);
-  execSync('npx husky install', { stdio: 'inherit' });
-  const preCommitContent = `#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
-npx lint-staged
-`;
-  await fs.writeFile('.husky/pre-commit', preCommitContent);
-  await fs.chmod('.husky/pre-commit', '755');
-  logger.info('Husky and lint-staged have been configured.');
-}
-
-async function removeConflictingDependencies(projectType) {
-  const conflictingDependencies = {
-    nextjs: ['@next/eslint-plugin-next'],
-    react: [],
-    nodejs: [],
-    angular: [],
-    vue: [],
-    svelte: [],
-  };
-
-  for (const dep of conflictingDependencies[projectType]) {
-    try {
-      execSync(`npm uninstall ${dep}`, { stdio: 'inherit' });
-      logger.info(`Removed conflicting dependency: ${dep}`);
-    } catch (error) {
-      logger.warn(`Failed to uninstall ${dep}. It might not have been installed.`);
-    }
-  }
-}
-
-async function checkExistingESLintConfig() {
-  const eslintConfigFiles = [
-    '.eslintrc',
-    '.eslintrc.js',
-    '.eslintrc.cjs',
-    '.eslintrc.yaml',
-    '.eslintrc.yml',
-    '.eslintrc.json',
-  ];
-
-  for (const configFile of eslintConfigFiles) {
-    try {
-      await fs.access(configFile);
-      return configFile;
-    } catch (error) {
-      // File doesn't exist, continue checking
-    }
-  }
-
-  return null;
-}
-
-async function setupProject() {
-  try {
-    await checkNodeVersion();
-    await checkGitRepository();
-
-    logger.info('Welcome to code-polish-pro! Let\'s set up your project.');
-
-    const projectType = await prompt(
-      `What type of project are you working on? (${projectTypes.join(', ')}): `,
-      (answer) => projectTypes.includes(answer.toLowerCase())
+  },
+  async getProjectOptions() {
+    const projectType = await this.prompt(
+      `What type of project are you working on? (${config.PROJECT_TYPES.join(', ')}): `,
+      (answer) => config.PROJECT_TYPES.includes(answer.toLowerCase())
     );
+    const useTypeScript = (await this.prompt('Are you using TypeScript? (y/n): ')).toLowerCase() === 'y';
+    const useHusky = (await this.prompt('Do you want to set up Husky and lint-staged for pre-commit hooks? (y/n): ')).toLowerCase() === 'y';
+    const useStrict = (await this.prompt('Do you want to enable strict mode for ESLint? (y/n): ')).toLowerCase() === 'y';
+    const usePrettier = (await this.prompt('Do you want to use Prettier for code formatting? (y/n): ')).toLowerCase() === 'y';
 
-    const packageJson = await readPackageJson();
-    const useTypeScript = (await prompt('Are you using TypeScript? (y/n): ')).toLowerCase() === 'y';
-    const useHusky = (await prompt('Do you want to set up Husky and lint-staged for pre-commit hooks? (y/n): ')).toLowerCase() === 'y';
-    const useStrict = (await prompt('Do you want to enable strict mode for ESLint? (y/n): ')).toLowerCase() === 'y';
-    const usePrettier = (await prompt('Do you want to use Prettier for code formatting? (y/n): ')).toLowerCase() === 'y';
+    return { projectType, useTypeScript, useHusky, useStrict, usePrettier };
+  },
+};
 
-    logger.info(`Setting up your ${projectType} project with the following options:`);
-    logger.info(`- ${useTypeScript ? 'TypeScript' : 'JavaScript'}`);
-    logger.info(`- ${useHusky ? 'With' : 'Without'} Husky and lint-staged`);
-    logger.info(`- ${useStrict ? 'Strict' : 'Standard'} ESLint configuration`);
-    logger.info(`- ${usePrettier ? 'With' : 'Without'} Prettier integration`);
+// File system utilities
+const fileSystem = {
+  async writeJsonFile(filePath, content) {
+    await fs.writeFile(filePath, JSON.stringify(content, null, 2) + '\n');
+    logger.info(`File created: ${filePath}`);
+  },
+  async readPackageJson() {
+    const packageJsonPath = path.join(process.cwd(), 'package.json');
+    try {
+      const content = await fs.readFile(packageJsonPath, 'utf-8');
+      return JSON.parse(content);
+    } catch (error) {
+      throw new Error('Unable to read package.json. Make sure you are in the root directory of your project.');
+    }
+  },
+  async updatePackageJson(updates) {
+    const packageJson = await this.readPackageJson();
+    const updatedPackageJson = { ...packageJson, ...updates };
+    await this.writeJsonFile('package.json', updatedPackageJson);
+  },
+  async checkExistingESLintConfig() {
+    const eslintConfigFiles = [
+      '.eslintrc',
+      '.eslintrc.js',
+      '.eslintrc.cjs',
+      '.eslintrc.yaml',
+      '.eslintrc.yml',
+      '.eslintrc.json',
+    ];
 
-    const existingESLintConfig = await checkExistingESLintConfig();
-    if (existingESLintConfig) {
-      logger.warn(`Existing ESLint configuration found: ${existingESLintConfig}`);
-      const overwrite = (await prompt('Do you want to overwrite the existing configuration? (y/n): ')).toLowerCase() === 'y';
-      if (!overwrite) {
-        logger.info('Keeping existing ESLint configuration. Skipping ESLint setup.');
-        return;
+    for (const configFile of eslintConfigFiles) {
+      try {
+        await fs.access(configFile);
+        return configFile;
+      } catch (error) {
+        // File doesn't exist, continue checking
       }
     }
 
-    await removeConflictingDependencies(projectType);
+    return null;
+  },
+};
 
-    let dependencies = [
-      ...commonDependencies,
-      ...typeSpecificDependencies[projectType],
-    ];
-    if (useTypeScript && projectType !== 'nextjs') dependencies = [...dependencies, ...typescriptDependencies];
-    if (!usePrettier) dependencies = dependencies.filter((dep) => !dep.includes('prettier'));
+// Package manager utilities
+const packageManager = {
+  async installDependencies(dependencies) {
+    logger.info('Installing dependencies...');
+    const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const args = ['install', '--save-dev', '--legacy-peer-deps', ...dependencies];
+    try {
+      await new Promise((resolve, reject) => {
+        const installProcess = spawn(npmCommand, args, { stdio: 'inherit' });
+        installProcess.on('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`npm install failed with code ${code}`));
+        });
+      });
+    } catch (error) {
+      logger.warn('Spawn method failed, falling back to execSync...');
+      try {
+        execSync(`${npmCommand} ${args.join(' ')}`, { stdio: 'inherit' });
+      } catch (execError) {
+        logger.error('Failed to install dependencies.');
+        throw execError;
+      }
+    }
+    logger.info('Dependencies installed successfully.');
+  },
+  async removeConflictingDependencies(projectType) {
+    const conflictingDependencies = {
+      nextjs: ['@next/eslint-plugin-next'],
+      react: [],
+      nodejs: [],
+      angular: [],
+      vue: [],
+      svelte: [],
+    };
 
-    await installDependencies(dependencies);
+    for (const dep of conflictingDependencies[projectType]) {
+      try {
+        execSync(`npm uninstall ${dep}`, { stdio: 'inherit' });
+        logger.info(`Removed conflicting dependency: ${dep}`);
+      } catch (error) {
+        logger.warn(`Failed to uninstall ${dep}. It might not have been installed.`);
+      }
+    }
+  },
+};
 
+// Environment check utilities
+const environmentChecker = {
+  async checkNodeVersion() {
+    const nodeVersion = process.version;
+    if (!semver.gte(nodeVersion, config.MINIMUM_NODE_VERSION)) {
+      throw new Error(`Node.js version ${config.MINIMUM_NODE_VERSION} or higher is required. Current version: ${nodeVersion}`);
+    }
+  },
+  async checkGitRepository() {
+    try {
+      await fs.access('.git');
+    } catch (error) {
+      throw new Error('This directory is not a Git repository. Please initialize a Git repository before running this script.');
+    }
+  },
+};
+
+// ESLint configuration generator
+const eslintConfigGenerator = {
+  generateConfig(projectType, useTypeScript, useStrict, usePrettier, packageJson) {
     const eslintConfig = {
-      ...eslintConfigs[projectType],
+      ...eslintConfigTemplates[projectType],
       root: true,
       env: {
         browser: true,
@@ -307,17 +280,79 @@ async function setupProject() {
       eslintConfig.extends.push('plugin:prettier/recommended');
     }
 
-    await writeJsonFile('.eslintrc.json', eslintConfig);
+    return eslintConfig;
+  },
+};
+
+// Prettier configuration generator
+const prettierConfigGenerator = {
+  generateConfig() {
+    return {
+      singleQuote: true,
+      trailingComma: 'es5',
+      printWidth: 100,
+      tabWidth: 2,
+      semi: true,
+    };
+  },
+};
+
+// Husky setup utility
+const huskySetup = {
+  async setup() {
+    logger.info('Setting up Husky and lint-staged...');
+    await packageManager.installDependencies(dependencyManager.huskyDependencies);
+    execSync('npx husky install', { stdio: 'inherit' });
+    const preCommitContent = `#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+npx lint-staged
+`;
+    await fs.writeFile('.husky/pre-commit', preCommitContent);
+    await fs.chmod('.husky/pre-commit', '755');
+    logger.info('Husky and lint-staged have been configured.');
+  },
+};
+
+// Main setup function
+async function setupProject() {
+  try {
+    await environmentChecker.checkNodeVersion();
+    await environmentChecker.checkGitRepository();
+
+    logger.info('Welcome to code-polish-pro! Let\'s set up your project.');
+
+    const options = await userInteraction.getProjectOptions();
+    const { projectType, useTypeScript, useHusky, useStrict, usePrettier } = options;
+
+    logger.info(`Setting up your ${projectType} project with the following options:`);
+    logger.info(`- ${useTypeScript ? 'TypeScript' : 'JavaScript'}`);
+    logger.info(`- ${useHusky ? 'With' : 'Without'} Husky and lint-staged`);
+    logger.info(`- ${useStrict ? 'Strict' : 'Standard'} ESLint configuration`);
+    logger.info(`- ${usePrettier ? 'With' : 'Without'} Prettier integration`);
+
+    const existingESLintConfig = await fileSystem.checkExistingESLintConfig();
+    if (existingESLintConfig) {
+      logger.warn(`Existing ESLint configuration found: ${existingESLintConfig}`);
+      const overwrite = (await userInteraction.prompt('Do you want to overwrite the existing configuration? (y/n): ')).toLowerCase() === 'y';
+      if (!overwrite) {
+        logger.info('Keeping existing ESLint configuration. Skipping ESLint setup.');
+        return;
+      }
+    }
+
+    await packageManager.removeConflictingDependencies(projectType);
+
+    const dependencies = dependencyManager.getProjectDependencies(projectType, useTypeScript, usePrettier);
+    await packageManager.installDependencies(dependencies);
+
+    const packageJson = await fileSystem.readPackageJson();
+    const eslintConfig = eslintConfigGenerator.generateConfig(projectType, useTypeScript, useStrict, usePrettier, packageJson);
+    await fileSystem.writeJsonFile('.eslintrc.json', eslintConfig);
 
     if (usePrettier) {
-      const prettierConfig = {
-        singleQuote: true,
-        trailingComma: 'es5',
-        printWidth: 100,
-        tabWidth: 2,
-        semi: true,
-      };
-      await writeJsonFile('.prettierrc', prettierConfig);
+      const prettierConfig = prettierConfigGenerator.generateConfig();
+      await fileSystem.writeJsonFile('.prettierrc', prettierConfig);
     }
 
     const packageJsonUpdates = {
@@ -336,10 +371,10 @@ async function setupProject() {
         '*.{js,jsx,ts,tsx}': ['eslint --fix'],
         '*.{json,md}': ['prettier --write'],
       };
-      await setupHusky();
+      await huskySetup.setup();
     }
 
-    await updatePackageJson(packageJsonUpdates);
+    await fileSystem.updatePackageJson(packageJsonUpdates);
 
     logger.info('ESLint and Prettier have been set up successfully!');
     logger.info('To address any potential vulnerabilities, please run:');
@@ -348,8 +383,8 @@ async function setupProject() {
     if (packageJson.type !== 'module') {
       logger.info('');
       logger.info('Note: Your package.json does not have "type": "module" set.');
-      logger.info('If you want to use ES modules, consider adding it to your package.json:');
-      logger.info('"type": "module"');
+      logger.info('If you want to use ES modules, consider adding')
+         logger.info('"type": "module"');
       logger.info('This will allow you to use import/export syntax without .mjs file extensions.');
     }
 
