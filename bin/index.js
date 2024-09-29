@@ -144,6 +144,10 @@ const fileSystem = {
     await fs.writeFile(filePath, JSON.stringify(content, null, 2) + '\n');
     logger.info(`File created: ${filePath}`);
   },
+  async writeFile(filePath, content) {
+    await fs.writeFile(filePath, content);
+    logger.info(`File created: ${filePath}`);
+  },
   async readPackageJson() {
     const packageJsonPath = path.join(process.cwd(), 'package.json');
     try {
@@ -178,6 +182,42 @@ const fileSystem = {
     }
 
     return null;
+  },
+  async createEslintIgnore(projectType) {
+    const commonIgnores = [
+      'node_modules',
+      'dist',
+      'build',
+      'coverage',
+      '*.min.js',
+      '*.d.ts',
+    ];
+
+    const typeSpecificIgnores = {
+      nextjs: ['next.config.js', '.next'],
+      react: ['react-app-env.d.ts'],
+      nodejs: [],
+      svelte: ['rollup.config.js', 'svelte.config.js'],
+    };
+
+    const ignores = [...commonIgnores, ...(typeSpecificIgnores[projectType] || [])];
+    const content = ignores.join('\n');
+    await this.writeFile('.eslintignore', content);
+  },
+  async createPrettierIgnore() {
+    const ignores = [
+      'node_modules',
+      'dist',
+      'build',
+      'coverage',
+      '*.min.js',
+      '*.d.ts',
+      '.next',
+      'package-lock.json',
+      'yarn.lock',
+    ];
+    const content = ignores.join('\n');
+    await this.writeFile('.prettierignore', content);
   },
 };
 
@@ -258,6 +298,12 @@ const eslintConfigGenerator = {
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: packageJson.type === 'module' ? 'module' : 'script',
+      },
+      rules: {
+        'no-console': useStrict ? 'error' : 'warn',
+        'no-debugger': 'error',
+        'no-unused-vars': 'error',
+        'node/no-unsupported-features/es-syntax': 'off',
       },
     };
 
