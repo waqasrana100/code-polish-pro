@@ -32,7 +32,7 @@ const dependencyManager = {
     nodejs: ['eslint-plugin-node@^11.1.0'],
     angular: ['@angular-eslint/eslint-plugin@^17.3.0', '@angular-eslint/eslint-plugin-template@^17.3.0'],
     vue: ['eslint-plugin-vue@^9.23.0'],
-    svelte: ['eslint-plugin-svelte@^2.35.1', 'eslint-config-svelte@^4.0.0'],
+    svelte: ['eslint-plugin-svelte@^2.35.1', 'eslint-config-svelte@latest'],
   },
   typescriptDependencies: [
     '@typescript-eslint/parser@^7.1.0',
@@ -315,6 +315,16 @@ npx lint-staged
   },
 };
 
+async function isSvelteUsingTypeScript() {
+  try {
+    const files = await fs.readdir(process.cwd());
+    return files.some(file => file.endsWith('.ts') || file.endsWith('.svelte'));
+  } catch (error) {
+    logger.warn('Error checking for TypeScript in Svelte project:', error);
+    return false;
+  }
+}
+
 // ESLint configuration generator
 const eslintConfigGenerator = {
   generateConfig(projectType, useTypeScript, useStrict, usePrettier, packageJson, existingConfig = {}) {
@@ -327,11 +337,11 @@ const eslintConfigGenerator = {
       },
       parserOptions: {
         ecmaVersion: 'latest',
-       sourceType: packageJson.type === 'module' 
-        ? 'module' 
-        : (projectType === 'react' || projectType === 'nextjs' || projectType === 'svelte') 
-          ? 'module' 
-          : 'script',
+        sourceType: packageJson.type === 'module'
+          ? 'module'
+          : (projectType === 'react' || projectType === 'nextjs' || projectType === 'svelte')
+            ? 'module'
+            : 'script',
       },
       rules: {
         'no-console': useStrict ? 'error' : 'warn',
@@ -389,6 +399,8 @@ const eslintConfigGenerator = {
     }
     return merged;
   },
+
+
 
   configureReact(config, useTypeScript) {
     config.extends = [
@@ -451,25 +463,32 @@ const eslintConfigGenerator = {
     return config;
   },
 
-  configureSvelte(config) {
-    config.extends = [...(config.extends || []), 'plugin:svelte/recommended'];
-    config.plugins = [...(config.plugins || []), 'svelte'];
-    config.overrides = [
-      ...(config.overrides || []),
-      {
-        files: ['*.svelte'],
-        parser: 'svelte-eslint-parser',
-        parserOptions: {
-          ecmaVersion: 2020,
-          sourceType: 'module',
-        },
-        rules: {
-          'no-unused-vars': 'warn',
-        },
+
+
+configureSvelte(config) {
+  config.extends = [
+    ...(config.extends || []),
+    'eslint:recommended',
+    'plugin:svelte/recommended',
+  ];
+  config.plugins = [...(config.plugins || []), 'svelte'];
+  config.overrides = [
+    ...(config.overrides || []),
+    {
+      files: ['*.svelte'],
+      parser: 'svelte-eslint-parser',
+      parserOptions: {
+        ecmaVersion: 2020,
+        sourceType: 'module',
       },
-    ];
-    return config;
-  },
+    },
+  ];
+  if (this.useTypeScript) {
+    config.overrides[0].parser = '@typescript-eslint/parser';
+    config.overrides[0].parserOptions.parser = 'svelte-eslint-parser';
+  }
+  return config;
+},
 
   configureVue(config) {
     config.extends = [...(config.extends || []), 'plugin:vue/vue3-recommended'];
@@ -531,6 +550,12 @@ async function setupProject() {
     logger.info(`- ${useStrict ? 'Strict' : 'Standard'} ESLint configuration`);
     logger.info(`- ${usePrettier ? 'With' : 'Without'} Prettier integration`);
 
+
+
+    if (projectType === 'svelte') {
+      useTypeScript = await isSvelteUsingTypeScript();
+      logger.info(`Detected ${useTypeScript ? 'TypeScript' : 'JavaScript'} for Svelte project.`);
+    }
     const existingESLintConfig = await fileSystem.checkExistingESLintConfig();
     let existingConfig = {};
     if (existingESLintConfig) {
@@ -557,7 +582,7 @@ async function setupProject() {
     if (usePrettier) {
       const prettierConfig = prettierConfigGenerator.generateConfig();
       await fileSystem.writeJsonFile('.prettierrc', prettierConfig);
-      
+
       // Generate .prettierignore file
       await fileSystem.createPrettierIgnore();
     }
