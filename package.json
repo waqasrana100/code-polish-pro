@@ -1,6 +1,6 @@
 {
   "name": "code-polish-pro",
-  "version": "2.0.27",
+  "version": "2.0.28",
   "description": "Advanced setup for ESLint, Prettier, and Husky with intelligent project detection",
   "bin": {
     "code-polish-pro": "bin/index.js"
