@@ -473,31 +473,40 @@ const eslintConfigGenerator = {
 
 
 
-configureSvelte(config, useTypeScript) {
-  config.extends = [
-    ...(config.extends || []),
-    'eslint:recommended',
-    'plugin:svelte/recommended',
-  ];
-  config.plugins = [...(config.plugins || []), 'svelte'];
-  config.overrides = [
-    ...(config.overrides || []),
-    {
-      files: ['*.svelte'],
-      parser: 'svelte-eslint-parser',
-      parserOptions: {
-        sourceType: 'module',
-        ecmaVersion: 2020,
-        extraFileExtensions: ['.svelte'],
-      },
-    },
-  ];
-  if (useTypeScript) {
-    config.overrides[0].parser = '@typescript-eslint/parser';
-    config.overrides[0].parserOptions.parser = 'svelte-eslint-parser';
-  }
-  return config;
-},
+// In the eslintConfigGenerator object
+   configureSvelte(config, useTypeScript) {
+     config.extends = [
+       'eslint:recommended',
+       'plugin:svelte/recommended',
+       ...(useTypeScript ? ['plugin:@typescript-eslint/recommended'] : []),
+       'prettier'
+     ];
+     config.plugins = ['svelte', ...(useTypeScript ? ['@typescript-eslint'] : [])];
+     config.overrides = [
+       {
+         files: ['*.svelte'],
+         parser: 'svelte-eslint-parser',
+         parserOptions: {
+           parser: useTypeScript ? '@typescript-eslint/parser' : null,
+         }
+       }
+     ];
+     if (useTypeScript) {
+       config.parser = '@typescript-eslint/parser';
+       config.parserOptions = {
+         ...config.parserOptions,
+         project: './tsconfig.json',
+         extraFileExtensions: ['.svelte']
+       };
+     }
+     config.settings = {
+       ...config.settings,
+       svelte: {
+         ignoreWarnings: ['missing-custom-element-compile-options']
+       }
+     };
+     return config;
+   },
 
   configureVue(config) {
     config.extends = [...(config.extends || []), 'plugin:vue/vue3-recommended'];
