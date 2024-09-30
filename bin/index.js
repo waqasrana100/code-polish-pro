@@ -51,9 +51,11 @@ const dependencyManager = {
   huskyDependencies: ['husky@^9.0.11', 'lint-staged@^15.2.2'],
   getProjectDependencies(projectType, useTypeScript, usePrettier) {
     let deps = [...this.commonDependencies, ...this.typeSpecificDependencies[projectType]];
-    if (useTypeScript && projectType !== 'nextjs' && projectType !== 'svelte') deps = [...deps, ...this.typescriptDependencies];
+    if (useTypeScript && projectType !== 'nextjs') {
+      deps = [...deps, ...(projectType === 'svelte' ? [] : this.typescriptDependencies)];
+    }
     if (!usePrettier) deps = deps.filter(dep => !dep.includes('prettier'));
-    return deps;
+    return [...new Set(deps)]; // Remove any duplicates
   },
 };
 
@@ -629,6 +631,19 @@ async function setupProject() {
     logger.info(`- ${useStrict ? 'Strict' : 'Standard'} ESLint configuration`);
     logger.info(`- ${usePrettier ? 'With' : 'Without'} Prettier integration`);
 
+    const existingESLintConfig = await fileSystem.checkExistingESLintConfig();
+    let existingConfig = {};
+    if (existingESLintConfig) {
+      logger.warn(`Existing ESLint configuration found: ${existingESLintConfig}`);
+      const overwrite = (await userInteraction.prompt('Do you want to overwrite the existing configuration? (y/n): ')).toLowerCase() === 'y';
+      if (!overwrite) {
+        logger.info('Merging with existing ESLint configuration.');
+        existingConfig = require(path.resolve(process.cwd(), existingESLintConfig));
+      }
+    }
+
+    await packageManager.removeConflictingDependencies(projectType);
+
     if (projectType === 'svelte') {
       useTypeScript = await isSvelteUsingTypeScript();
       logger.info(`Detected ${useTypeScript ? 'TypeScript' : 'JavaScript'} for Svelte project.`);
@@ -644,21 +659,11 @@ async function setupProject() {
       }
 
       const svelteSpecificDependencies = dependencyManager.typeSpecificDependencies.svelte;
-      await packageManager.installDependencies(svelteSpecificDependencies);
+      const commonDependencies = dependencyManager.commonDependencies;
+      const allDependencies = [...new Set([...svelteSpecificDependencies, ...commonDependencies])];
+      const dependencies = usePrettier ? allDependencies : allDependencies.filter(dep => !dep.includes('prettier'));
+      await packageManager.installDependencies(dependencies);
     } else {
-      const existingESLintConfig = await fileSystem.checkExistingESLintConfig();
-      let existingConfig = {};
-      if (existingESLintConfig) {
-        logger.warn(`Existing ESLint configuration found: ${existingESLintConfig}`);
-        const overwrite = (await userInteraction.prompt('Do you want to overwrite the existing configuration? (y/n): ')).toLowerCase() === 'y';
-        if (!overwrite) {
-          logger.info('Merging with existing ESLint configuration.');
-          existingConfig = require(path.resolve(process.cwd(), existingESLintConfig));
-        }
-      }
-
-      await packageManager.removeConflictingDependencies(projectType);
-
       const dependencies = dependencyManager.getProjectDependencies(projectType, useTypeScript, usePrettier);
       await packageManager.installDependencies(dependencies);
 
@@ -698,7 +703,9 @@ async function setupProject() {
     }
 
     if (usePrettier) {
-      packageJsonUpdates.scripts.format = 'prettier --write .';
+      packageJsonUpdates.scripts.format = projectType === 'svelte' 
+        ? 'prettier --write --plugin prettier-plugin-svelte .'
+        : 'prettier --write .';
     }
 
     if (useHusky) {
