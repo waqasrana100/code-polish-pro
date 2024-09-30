@@ -583,7 +583,6 @@ async function createSvelteEslintConfig(useTypeScript) {
       }
     ],
     rules: {
-      'svelte/no-unused-vars': 'error',
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': useTypeScript ? ['error', { "varsIgnorePattern": "^_", "argsIgnorePattern": "^_" }] : 'off'
     }
