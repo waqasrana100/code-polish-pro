@@ -32,7 +32,13 @@ const dependencyManager = {
     nodejs: ['eslint-plugin-node@^11.1.0'],
     angular: ['@angular-eslint/eslint-plugin@^17.3.0', '@angular-eslint/eslint-plugin-template@^17.3.0'],
     vue: ['eslint-plugin-vue@^9.23.0'],
-    svelte: ['eslint-plugin-svelte@^2.35.1'],
+    svelte: [
+      'eslint-plugin-svelte@^2.35.1',
+      'svelte-eslint-parser@^0.33.0',
+      'prettier-plugin-svelte@^3.0.0',
+      'eslint-config-prettier@^9.1.0',
+      'svelte-check@^3.0.0'
+    ],
   },
   typescriptDependencies: [
     '@typescript-eslint/parser@^7.1.0',
@@ -198,7 +204,17 @@ const fileSystem = {
       nextjs: ['next.config.js', '.next'],
       react: ['react-app-env.d.ts'],
       nodejs: [],
-      svelte: ['rollup.config.js', 'svelte.config.js'],
+      svelte: [
+        'rollup.config.js',
+        'svelte.config.js',
+        '.svelte-kit',
+        'package',
+        'build',
+        '.env',
+        '.env.*',
+        '!.env.example',
+        'vite.config.js'
+      ],
     };
 
     const ignores = [...commonIgnores, ...(typeSpecificIgnores[projectType] || [])];
@@ -295,14 +311,26 @@ const environmentChecker = {
 
 // Prettier configuration generator
 const prettierConfigGenerator = {
-  generateConfig() {
-    return {
+  generateConfig(projectType) {
+    const baseConfig = {
       singleQuote: true,
       trailingComma: 'es5',
       printWidth: 100,
       tabWidth: 2,
       semi: true,
     };
+
+    if (projectType === 'svelte') {
+      return {
+        ...baseConfig,
+        plugins: ['prettier-plugin-svelte'],
+        svelteStrictMode: false,
+        svelteAllowShorthand: true,
+        svelteIndentScriptAndStyle: true,
+      };
+    }
+
+    return baseConfig;
   },
 };
 
@@ -503,7 +531,6 @@ const eslintConfigGenerator = {
 
 
 
-  // In the eslintConfigGenerator object
   configureSvelte(config, useTypeScript) {
     config.extends = [
       'eslint:recommended',
@@ -518,29 +545,26 @@ const eslintConfigGenerator = {
         parser: 'svelte-eslint-parser',
         parserOptions: {
           parser: useTypeScript ? '@typescript-eslint/parser' : null,
+        },
+        rules: {
+          'no-unused-vars': 'off',
+          'svelte/no-unused-vars': 'error',
+          'svelte/valid-compile': 'error',
+          'svelte/no-at-html-tags': 'warn',
         }
       }
     ];
-    if (useTypeScript) {
-      config.parser = '@typescript-eslint/parser';
-      config.parserOptions = {
-        ...config.parserOptions,
-        project: './tsconfig.json',
-        extraFileExtensions: ['.svelte']
-      };
-    }
+
     config.settings = {
       ...config.settings,
       'svelte3/typescript': useTypeScript,
       'svelte3/ignore-styles': () => true
     };
-    config.rules = {
-      ...config.rules,
-      'svelte/valid-compile': 'error',
-      'svelte/no-at-html-tags': 'warn',
-      'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': useTypeScript ? ['error', { 'argsIgnorePattern': '^_', 'varsIgnorePattern': '^_' }] : 'off',
-    };
+
+    if (useTypeScript) {
+      config.plugins.push('@typescript-eslint');
+      config.extends.push('plugin:@typescript-eslint/recommended');
+    }
     return config;
   },
 
@@ -640,14 +664,14 @@ async function setupProject() {
     await fileSystem.createEslintIgnore(projectType);
 
     if (usePrettier) {
-      const prettierConfig = prettierConfigGenerator.generateConfig();
+      const prettierConfig = prettierConfigGenerator.generateConfig(projectType);
       await fileSystem.writeJsonFile('.prettierrc', prettierConfig);
 
       // Generate .prettierignore file
       await fileSystem.createPrettierIgnore();
     }
 
-    const packageJsonUpdates = {
+    let packageJsonUpdates = {
       scripts: {
         ...(packageJson.scripts || {}),
         lint: packageJson.scripts?.lint || 'eslint .',
@@ -655,14 +679,24 @@ async function setupProject() {
       },
     };
 
+    if (projectType === 'svelte') {
+      packageJsonUpdates.scripts = {
+        ...packageJsonUpdates.scripts,
+        lint: 'eslint --ignore-path .gitignore .',
+        'lint:fix': 'eslint --ignore-path .gitignore --fix .',
+        check: 'svelte-check --tsconfig ./tsconfig.json',
+        format: 'prettier --write --plugin prettier-plugin-svelte .',
+      };
+    }
+
     if (usePrettier) {
       packageJsonUpdates.scripts.format = packageJson.scripts?.format || 'prettier --write .';
     }
 
     if (useHusky) {
       packageJsonUpdates['lint-staged'] = {
-        '*.{js,jsx,ts,tsx}': ['eslint --fix'],
-        '*.{json,md}': ['prettier --write'],
+        '*.{js,jsx,ts,tsx,svelte}': ['eslint --fix'],
+        '*.{json,md,css,html,svelte}': ['prettier --write'],
       };
       await huskySetup.setup();
     }
