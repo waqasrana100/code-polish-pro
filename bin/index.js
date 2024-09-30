@@ -32,7 +32,7 @@ const dependencyManager = {
     nodejs: ['eslint-plugin-node@^11.1.0'],
     angular: ['@angular-eslint/eslint-plugin@^17.3.0', '@angular-eslint/eslint-plugin-template@^17.3.0'],
     vue: ['eslint-plugin-vue@^9.23.0'],
-    svelte: ['eslint-plugin-svelte@^2.35.1', 'eslint-config-svelte@latest'],
+    svelte: ['eslint-plugin-svelte@^2.35.1'],
   },
   typescriptDependencies: [
     '@typescript-eslint/parser@^7.1.0',
@@ -224,29 +224,37 @@ const fileSystem = {
 
 // Package manager utilities
 const packageManager = {
-  async installDependencies(dependencies) {
-    logger.info('Installing dependencies...');
-    const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    const args = ['install', '--save-dev', '--legacy-peer-deps', ...dependencies];
-    try {
-      await new Promise((resolve, reject) => {
-        const installProcess = spawn(npmCommand, args, { stdio: 'inherit' });
-        installProcess.on('close', (code) => {
-          if (code === 0) resolve();
-          else reject(new Error(`npm install failed with code ${code}`));
-        });
+ async installDependencies(dependencies) {
+  logger.info('Installing dependencies...');
+  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const args = ['install', '--save-dev', '--legacy-peer-deps', ...dependencies];
+  try {
+    await new Promise((resolve, reject) => {
+      const installProcess = spawn(npmCommand, args, { stdio: 'inherit' });
+      installProcess.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`npm install failed with code ${code}`));
       });
-    } catch (error) {
-      logger.warn('Spawn method failed, falling back to execSync...');
-      try {
-        execSync(`${npmCommand} ${args.join(' ')}`, { stdio: 'inherit' });
-      } catch (execError) {
-        logger.error('Failed to install dependencies.');
-        throw execError;
+    });
+  } catch (error) {
+    logger.warn('Spawn method failed, falling back to execSync...');
+    try {
+      execSync(`${npmCommand} ${args.join(' ')}`, { stdio: 'inherit' });
+    } catch (execError) {
+      logger.error('Failed to install dependencies.');
+      logger.error('Attempting to install dependencies one by one...');
+      for (const dep of dependencies) {
+        try {
+          execSync(`${npmCommand} install --save-dev ${dep}`, { stdio: 'inherit' });
+          logger.info(`Successfully installed ${dep}`);
+        } catch (singleDepError) {
+          logger.error(`Failed to install ${dep}. Skipping...`);
+        }
       }
     }
-    logger.info('Dependencies installed successfully.');
-  },
+  }
+  logger.info('Dependency installation process completed.');
+},
   async removeConflictingDependencies(projectType) {
     const conflictingDependencies = {
       nextjs: ['@next/eslint-plugin-next'],
@@ -465,30 +473,31 @@ const eslintConfigGenerator = {
 
 
 
-  configureSvelte(config) {
-    config.extends = [
-      ...(config.extends || []),
-      'eslint:recommended',
-      'plugin:svelte/recommended',
-    ];
-    config.plugins = [...(config.plugins || []), 'svelte'];
-    config.overrides = [
-      ...(config.overrides || []),
-      {
-        files: ['*.svelte'],
-        parser: 'svelte-eslint-parser',
-        parserOptions: {
-          ecmaVersion: 2020,
-          sourceType: 'module',
-        },
+configureSvelte(config, useTypeScript) {
+  config.extends = [
+    ...(config.extends || []),
+    'eslint:recommended',
+    'plugin:svelte/recommended',
+  ];
+  config.plugins = [...(config.plugins || []), 'svelte'];
+  config.overrides = [
+    ...(config.overrides || []),
+    {
+      files: ['*.svelte'],
+      parser: 'svelte-eslint-parser',
+      parserOptions: {
+        sourceType: 'module',
+        ecmaVersion: 2020,
+        extraFileExtensions: ['.svelte'],
       },
-    ];
-    if (useTypeScript) {
-      config.overrides[0].parser = '@typescript-eslint/parser';
-      config.overrides[0].parserOptions.parser = 'svelte-eslint-parser';
-    }
-    return config;
-  },
+    },
+  ];
+  if (useTypeScript) {
+    config.overrides[0].parser = '@typescript-eslint/parser';
+    config.overrides[0].parserOptions.parser = 'svelte-eslint-parser';
+  }
+  return config;
+},
 
   configureVue(config) {
     config.extends = [...(config.extends || []), 'plugin:vue/vue3-recommended'];
