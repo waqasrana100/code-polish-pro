@@ -33,12 +33,12 @@ const dependencyManager = {
     angular: ['@angular-eslint/eslint-plugin@^17.3.0', '@angular-eslint/eslint-plugin-template@^17.3.0'],
     vue: ['eslint-plugin-vue@^9.23.0'],
     svelte: [
-      'eslint-plugin-svelte@^2.35.1',
-      'svelte-eslint-parser@^0.33.0',
-      'prettier-plugin-svelte@^3.0.0',
-      'eslint-config-prettier@^9.1.0',
-      'svelte-check@^3.0.0'
-    ],
+    'eslint-plugin-svelte@latest',
+    'svelte-eslint-parser@latest',
+    'prettier-plugin-svelte@latest',
+    'eslint-config-prettier@latest',
+    'svelte-check@latest'
+  ],
   },
   typescriptDependencies: [
     '@typescript-eslint/parser@^7.1.0',
@@ -531,42 +531,42 @@ const eslintConfigGenerator = {
 
 
 
-  configureSvelte(config, useTypeScript) {
-    config.extends = [
-      'eslint:recommended',
-      'plugin:svelte/recommended',
-      ...(useTypeScript ? ['plugin:@typescript-eslint/recommended'] : []),
-      'prettier'
-    ];
-    config.plugins = ['svelte', ...(useTypeScript ? ['@typescript-eslint'] : [])];
-    config.overrides = [
-      {
-        files: ['*.svelte'],
-        parser: 'svelte-eslint-parser',
-        parserOptions: {
-          parser: useTypeScript ? '@typescript-eslint/parser' : null,
-        },
-        rules: {
-          'no-unused-vars': 'off',
-          'svelte/no-unused-vars': 'error',
-          'svelte/valid-compile': 'error',
-          'svelte/no-at-html-tags': 'warn',
-        }
-      }
-    ];
-
-    config.settings = {
-      ...config.settings,
-      'svelte3/typescript': useTypeScript,
-      'svelte3/ignore-styles': () => true
-    };
-
-    if (useTypeScript) {
-      config.plugins.push('@typescript-eslint');
-      config.extends.push('plugin:@typescript-eslint/recommended');
+configureSvelte(config, useTypeScript) {
+  config.extends = [
+    'eslint:recommended',
+    'plugin:svelte/recommended',
+  ];
+  config.parser = 'svelte-eslint-parser';
+  config.plugins = ['svelte'];
+  config.overrides = [
+    {
+      files: ['*.svelte'],
+      parser: 'svelte-eslint-parser',
+      parserOptions: {
+        parser: useTypeScript ? '@typescript-eslint/parser' : 'espree',
+      },
     }
-    return config;
-  },
+  ];
+  if (useTypeScript) {
+    config.extends.push('plugin:@typescript-eslint/recommended');
+    config.plugins.push('@typescript-eslint');
+    config.parserOptions = {
+      ...config.parserOptions,
+      project: './tsconfig.json',
+      extraFileExtensions: ['.svelte']
+    };
+  }
+  
+  // Add specific rules for Svelte files
+  config.rules = {
+    ...config.rules,
+    'svelte/no-unused-vars': 'error',
+    'no-unused-vars': 'off',
+    '@typescript-eslint/no-unused-vars': useTypeScript ? ['error', { "varsIgnorePattern": "^_", "argsIgnorePattern": "^_" }] : 'off',
+  };
+
+  return config;
+},
 
   configureVue(config) {
     config.extends = [...(config.extends || []), 'plugin:vue/vue3-recommended'];
