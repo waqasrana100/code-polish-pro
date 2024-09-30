@@ -224,37 +224,37 @@ const fileSystem = {
 
 // Package manager utilities
 const packageManager = {
- async installDependencies(dependencies) {
-  logger.info('Installing dependencies...');
-  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const args = ['install', '--save-dev', '--legacy-peer-deps', ...dependencies];
-  try {
-    await new Promise((resolve, reject) => {
-      const installProcess = spawn(npmCommand, args, { stdio: 'inherit' });
-      installProcess.on('close', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`npm install failed with code ${code}`));
-      });
-    });
-  } catch (error) {
-    logger.warn('Spawn method failed, falling back to execSync...');
+  async installDependencies(dependencies) {
+    logger.info('Installing dependencies...');
+    const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const args = ['install', '--save-dev', '--legacy-peer-deps', ...dependencies];
     try {
-      execSync(`${npmCommand} ${args.join(' ')}`, { stdio: 'inherit' });
-    } catch (execError) {
-      logger.error('Failed to install dependencies.');
-      logger.error('Attempting to install dependencies one by one...');
-      for (const dep of dependencies) {
-        try {
-          execSync(`${npmCommand} install --save-dev ${dep}`, { stdio: 'inherit' });
-          logger.info(`Successfully installed ${dep}`);
-        } catch (singleDepError) {
-          logger.error(`Failed to install ${dep}. Skipping...`);
+      await new Promise((resolve, reject) => {
+        const installProcess = spawn(npmCommand, args, { stdio: 'inherit' });
+        installProcess.on('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`npm install failed with code ${code}`));
+        });
+      });
+    } catch (error) {
+      logger.warn('Spawn method failed, falling back to execSync...');
+      try {
+        execSync(`${npmCommand} ${args.join(' ')}`, { stdio: 'inherit' });
+      } catch (execError) {
+        logger.error('Failed to install dependencies.');
+        logger.error('Attempting to install dependencies one by one...');
+        for (const dep of dependencies) {
+          try {
+            execSync(`${npmCommand} install --save-dev ${dep}`, { stdio: 'inherit' });
+            logger.info(`Successfully installed ${dep}`);
+          } catch (singleDepError) {
+            logger.error(`Failed to install ${dep}. Skipping...`);
+          }
         }
       }
     }
-  }
-  logger.info('Dependency installation process completed.');
-},
+    logger.info('Dependency installation process completed.');
+  },
   async removeConflictingDependencies(projectType) {
     const conflictingDependencies = {
       nextjs: ['@next/eslint-plugin-next'],
@@ -321,6 +321,35 @@ npx lint-staged
     await fs.chmod('.husky/pre-commit', '755');
     logger.info('Husky and lint-staged have been configured.');
   },
+};
+
+
+async function createSvelteTsConfig() {
+  const tsConfig = {
+    extends: '@tsconfig/svelte/tsconfig.json',
+    compilerOptions: {
+      moduleResolution: 'node',
+      target: 'esnext',
+      module: 'esnext',
+      importsNotUsedAsValues: 'error',
+      isolatedModules: true,
+      sourceMap: true,
+      esModuleInterop: true,
+      skipLibCheck: true,
+      forceConsistentCasingInFileNames: true,
+      allowJs: true,
+      checkJs: true,
+      baseUrl: '.',
+      paths: {
+        '$lib': ['src/lib'],
+        '$lib/*': ['src/lib/*']
+      }
+    },
+    include: ['src/**/*.d.ts', 'src/**/*.ts', 'src/**/*.js', 'src/**/*.svelte'],
+    exclude: ['node_modules/*', '__sapper__/*', 'public/*']
+  };
+
+  await fileSystem.writeJsonFile('tsconfig.json', tsConfig);
 };
 
 async function isSvelteUsingTypeScript() {
@@ -473,40 +502,47 @@ const eslintConfigGenerator = {
 
 
 
-// In the eslintConfigGenerator object
-   configureSvelte(config, useTypeScript) {
-     config.extends = [
-       'eslint:recommended',
-       'plugin:svelte/recommended',
-       ...(useTypeScript ? ['plugin:@typescript-eslint/recommended'] : []),
-       'prettier'
-     ];
-     config.plugins = ['svelte', ...(useTypeScript ? ['@typescript-eslint'] : [])];
-     config.overrides = [
-       {
-         files: ['*.svelte'],
-         parser: 'svelte-eslint-parser',
-         parserOptions: {
-           parser: useTypeScript ? '@typescript-eslint/parser' : null,
-         }
-       }
-     ];
-     if (useTypeScript) {
-       config.parser = '@typescript-eslint/parser';
-       config.parserOptions = {
-         ...config.parserOptions,
-         project: './tsconfig.json',
-         extraFileExtensions: ['.svelte']
-       };
-     }
-     config.settings = {
-       ...config.settings,
-       svelte: {
-         ignoreWarnings: ['missing-custom-element-compile-options']
-       }
-     };
-     return config;
-   },
+
+  // In the eslintConfigGenerator object
+  configureSvelte(config, useTypeScript) {
+    config.extends = [
+      'eslint:recommended',
+      'plugin:svelte/recommended',
+      ...(useTypeScript ? ['plugin:@typescript-eslint/recommended'] : []),
+      'prettier'
+    ];
+    config.plugins = ['svelte', ...(useTypeScript ? ['@typescript-eslint'] : [])];
+    config.overrides = [
+      {
+        files: ['*.svelte'],
+        parser: 'svelte-eslint-parser',
+        parserOptions: {
+          parser: useTypeScript ? '@typescript-eslint/parser' : null,
+        }
+      }
+    ];
+    if (useTypeScript) {
+      config.parser = '@typescript-eslint/parser';
+      config.parserOptions = {
+        ...config.parserOptions,
+        project: './tsconfig.json',
+        extraFileExtensions: ['.svelte']
+      };
+    }
+    config.settings = {
+      ...config.settings,
+      'svelte3/typescript': useTypeScript,
+      'svelte3/ignore-styles': () => true
+    };
+    config.rules = {
+      ...config.rules,
+      'svelte/valid-compile': 'error',
+      'svelte/no-at-html-tags': 'warn',
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': useTypeScript ? ['error', { 'argsIgnorePattern': '^_', 'varsIgnorePattern': '^_' }] : 'off',
+    };
+    return config;
+  },
 
   configureVue(config) {
     config.extends = [...(config.extends || []), 'plugin:vue/vue3-recommended'];
@@ -574,6 +610,10 @@ async function setupProject() {
     if (projectType === 'svelte') {
       useTypeScript = await isSvelteUsingTypeScript();
       logger.info(`Detected ${useTypeScript ? 'TypeScript' : 'JavaScript'} for Svelte project.`);
+    }
+
+    if (projectType === 'svelte' && useTypeScript) {
+      await createSvelteTsConfig();
     }
 
     const existingESLintConfig = await fileSystem.checkExistingESLintConfig();
