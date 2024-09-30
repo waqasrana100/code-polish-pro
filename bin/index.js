@@ -318,7 +318,7 @@ npx lint-staged
 async function isSvelteUsingTypeScript() {
   try {
     const files = await fs.readdir(process.cwd());
-    return files.some(file => file.endsWith('.ts') || file.endsWith('.svelte'));
+    return files.some(file => file === 'tsconfig.json' || file.endsWith('.ts') || file.endsWith('.svelte'));
   } catch (error) {
     logger.warn('Error checking for TypeScript in Svelte project:', error);
     return false;
@@ -465,30 +465,30 @@ const eslintConfigGenerator = {
 
 
 
-configureSvelte(config) {
-  config.extends = [
-    ...(config.extends || []),
-    'eslint:recommended',
-    'plugin:svelte/recommended',
-  ];
-  config.plugins = [...(config.plugins || []), 'svelte'];
-  config.overrides = [
-    ...(config.overrides || []),
-    {
-      files: ['*.svelte'],
-      parser: 'svelte-eslint-parser',
-      parserOptions: {
-        ecmaVersion: 2020,
-        sourceType: 'module',
+  configureSvelte(config) {
+    config.extends = [
+      ...(config.extends || []),
+      'eslint:recommended',
+      'plugin:svelte/recommended',
+    ];
+    config.plugins = [...(config.plugins || []), 'svelte'];
+    config.overrides = [
+      ...(config.overrides || []),
+      {
+        files: ['*.svelte'],
+        parser: 'svelte-eslint-parser',
+        parserOptions: {
+          ecmaVersion: 2020,
+          sourceType: 'module',
+        },
       },
-    },
-  ];
-  if (this.useTypeScript) {
-    config.overrides[0].parser = '@typescript-eslint/parser';
-    config.overrides[0].parserOptions.parser = 'svelte-eslint-parser';
-  }
-  return config;
-},
+    ];
+    if (useTypeScript) {
+      config.overrides[0].parser = '@typescript-eslint/parser';
+      config.overrides[0].parserOptions.parser = 'svelte-eslint-parser';
+    }
+    return config;
+  },
 
   configureVue(config) {
     config.extends = [...(config.extends || []), 'plugin:vue/vue3-recommended'];
@@ -542,7 +542,8 @@ async function setupProject() {
     logger.info('Welcome to code-polish-pro! Let\'s set up your project.');
 
     const options = await userInteraction.getProjectOptions();
-    const { projectType, useTypeScript, useHusky, useStrict, usePrettier } = options;
+    let { projectType, useTypeScript, useHusky, useStrict, usePrettier } = options;
+
 
     logger.info(`Setting up your ${projectType} project with the following options:`);
     logger.info(`- ${useTypeScript ? 'TypeScript' : 'JavaScript'}`);
@@ -556,6 +557,7 @@ async function setupProject() {
       useTypeScript = await isSvelteUsingTypeScript();
       logger.info(`Detected ${useTypeScript ? 'TypeScript' : 'JavaScript'} for Svelte project.`);
     }
+
     const existingESLintConfig = await fileSystem.checkExistingESLintConfig();
     let existingConfig = {};
     if (existingESLintConfig) {
